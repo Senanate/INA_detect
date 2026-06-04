@@ -1,0 +1,13 @@
+{
+  "id": "T-18436e2a-11f3-49be-b604-8acda0d54e9c",
+  "subject": "Verify LCD project references",
+  "description": "Check LCD source files in uvprojx and include path contains Bsp\\LCD.",
+  "status": "completed",
+  "activeForm": "checking LCD uvprojx references",
+  "blocks": [],
+  "blockedBy": [
+    "T-aa40aabb-225a-49e0-bf2a-145db2c3feda"
+  ],
+  "parentID": "T-7cf7df0c-01af-483c-8d11-49c2e613fce2",
+  "threadID": "ses_1773be811ffe6bJgyk2F0IQiW6"
+}

@@ -1,0 +1,11 @@
+{
+  "id": "T-aa40aabb-225a-49e0-bf2a-145db2c3feda",
+  "subject": "Parse Keil project XML",
+  "description": "Validate uvprojx XML parses cleanly.",
+  "status": "completed",
+  "activeForm": "checking uvprojx XML",
+  "blocks": [],
+  "blockedBy": [],
+  "parentID": "T-7cf7df0c-01af-483c-8d11-49c2e613fce2",
+  "threadID": "ses_1773be811ffe6bJgyk2F0IQiW6"
+}

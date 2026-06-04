@@ -1,0 +1,13 @@
+{
+  "id": "T-00101067-bf9a-43b7-80df-a24f38395c0c",
+  "subject": "Check LCD unresolved symbols",
+  "description": "Inspect lcd.c/lcd_init.c and project-wide definitions for hdma_spi2_tx, htim1, hspi2, LCD_* macros, and HAL macros.",
+  "status": "completed",
+  "activeForm": "checking LCD symbol dependencies",
+  "blocks": [],
+  "blockedBy": [
+    "T-18436e2a-11f3-49be-b604-8acda0d54e9c"
+  ],
+  "parentID": "T-7cf7df0c-01af-483c-8d11-49c2e613fce2",
+  "threadID": "ses_1773be811ffe6bJgyk2F0IQiW6"
+}

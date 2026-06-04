@@ -1,0 +1,13 @@
+{
+  "id": "T-5cf9b7c4-19b9-484f-8bbb-83975b02699e",
+  "subject": "Verify LCD task wiring",
+  "description": "Check User_Tasks.c LCD includes and LCDTestTask creation, stack, priority, and peripheral initialization order.",
+  "status": "completed",
+  "activeForm": "checking LCD FreeRTOS task wiring",
+  "blocks": [],
+  "blockedBy": [
+    "T-00101067-bf9a-43b7-80df-a24f38395c0c"
+  ],
+  "parentID": "T-7cf7df0c-01af-483c-8d11-49c2e613fce2",
+  "threadID": "ses_1773be811ffe6bJgyk2F0IQiW6"
+}

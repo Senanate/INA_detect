@@ -1,0 +1,10 @@
+{
+  "id": "T-7cf7df0c-01af-483c-8d11-49c2e613fce2",
+  "subject": "Static QA review LCD BSP migration",
+  "description": "Validate Keil XML, project references/include paths, LCD unresolved symbols, and FreeRTOS task wiring without editing files.",
+  "status": "completed",
+  "activeForm": "reviewing LCD BSP migration risks",
+  "blocks": [],
+  "blockedBy": [],
+  "threadID": "ses_1773be811ffe6bJgyk2F0IQiW6"
+}

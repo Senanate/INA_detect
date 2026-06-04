@@ -1,0 +1,13 @@
+{
+  "id": "T-f4d279ca-70ca-47bc-89eb-2002f6baed4e",
+  "subject": "移植LCD底层驱动",
+  "description": "从参考工程复制 BSP/LCD 到当前工程，保持底层驱动文件结构一致。",
+  "status": "completed",
+  "activeForm": "复制 LCD 驱动",
+  "blocks": [],
+  "blockedBy": [],
+  "metadata": {
+    "scope": "BSP/LCD"
+  },
+  "threadID": "ses_179c0a1c9ffeRIDBo1fiZQj52F"
+}
