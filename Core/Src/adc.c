@@ -21,7 +21,11 @@
 #include "adc.h"
 
 /* USER CODE BEGIN 0 */
+#include "Task_Init.h"
 
+uint16_t adc_raw_buffer[ADC_DMA_ROWS][ADC_CHANNELS];
+volatile uint32_t adc_queue_drop_count = 0U;
+volatile uint32_t adc_error_code = HAL_ADC_ERROR_NONE;
 /* USER CODE END 0 */
 
 ADC_HandleTypeDef hadc1;
@@ -199,4 +203,51 @@ void HAL_ADC_MspDeInit(ADC_HandleTypeDef* adcHandle)
 
 /* USER CODE BEGIN 1 */
 
+/**
+ * @brief 将 DMA 前半块复制到采集队列。
+ * @param hadc 触发回调的 ADC。
+ * @note 中断内采用零等待发送，队列满时记录丢块次数。
+ */
+void HAL_ADC_ConvHalfCpltCallback(ADC_HandleTypeDef *hadc)
+{
+  if(hadc->Instance != ADC1)
+  {
+    return;
+  }
+  if(osMessageQueuePut(ADC_MessageQueue, &adc_raw_buffer[0], 0, 0) != osOK) //若此时DMA前半段队列已经满了,则丢弃该块数据,并记录丢块次数
+  {
+    adc_queue_drop_count++;
+  }
+}
+/**
+ * @brief 将 DMA 后半块复制到采集队列。
+ * @param hadc 触发回调的 ADC。
+ * @note DMA 正在写另一半区域，当前数据块必须及时完成复制。
+ */
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
+{
+  if (hadc->Instance != ADC1)
+    {
+        return;
+    }
+
+    if (osMessageQueuePut(ADC_MessageQueue,
+                          &adc_raw_buffer[ADC_TIMES][0],
+                          0U,
+                          0U) != osOK)//若此时DMA后半段队列满了,则丢弃该块数据,并记录丢块次数
+    {
+        adc_queue_drop_count++;
+    }
+}
+/**
+ * @brief 记录 ADC 或关联 DMA 的错误。
+ * @param hadc 发生错误的 ADC。
+ */
+void HAL_ADC_ErrorCallback(ADC_HandleTypeDef *hadc)
+{
+    if (hadc->Instance == ADC1)
+    {
+        adc_error_code = HAL_ADC_GetError(hadc);
+    }
+}
 /* USER CODE END 1 */

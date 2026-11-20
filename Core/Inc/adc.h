@@ -29,7 +29,27 @@ extern "C" {
 #include "main.h"
 
 /* USER CODE BEGIN Includes */
+#define ADC_CHANNELS       5U //5个通道ADC采样
+#define ADC_TIMES          25U //每次采样25次(2.5ms)
+#define ADC_DMA_ROWS       (ADC_TIMES * 2U) 
 
+//ADC采样通道顺序 rank1=PA5, rank2=PA6, rank3=PA7, rank4=PB0, rank5=PB1
+#define ADC_IDX_VOL        0U
+#define ADC_IDX_LOW         1U
+#define ADC_IDX_MID         2U
+#define ADC_IDX_HIGH        3U
+#define ADC_IDX_REF         4U
+
+/* 每个队列消息保存一半 DMA 缓冲区的数据。 */
+typedef struct
+{
+    uint16_t samples[ADC_TIMES][ADC_CHANNELS];
+} ADC_Block_t;
+
+extern uint16_t adc_raw_buffer[ADC_DMA_ROWS][ADC_CHANNELS];
+
+extern volatile uint32_t adc_queue_drop_count;
+extern volatile uint32_t adc_error_code;
 /* USER CODE END Includes */
 
 extern ADC_HandleTypeDef hadc1;
