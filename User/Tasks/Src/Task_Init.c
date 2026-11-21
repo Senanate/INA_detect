@@ -17,7 +17,7 @@
 // 流向为 KeyTask -> LVGLtask
 osMessageQueueId_t Key_MessageQueue;
 // ADC DMA采集数据队列
-// 流向为 ADCTask -> LVGLtask
+// 流向为 ADC DMA 回调 -> ADCTask
 osMessageQueueId_t ADC_MessageQueue;
 /* Tasks ---------------------------------------------------------------------*/
 //硬件初始化任务

@@ -13,7 +13,7 @@ extern volatile float adc_high_diff_raw;
 extern volatile uint32_t adc_processed_block_count;
 extern volatile uint32_t adc_timeout_count;
 /**
- * @brief 接收采样数据块并计算原始码值均值。
+ * @brief 接收采样数据块，发布原始码值均值及固定高档测量结果。
  * @param argument 任务参数，当前未使用。
  */
 void ADCTask(void *argument);

@@ -1,22 +1,22 @@
 /* USER CODE BEGIN Include */
+#include <stdbool.h>
+
 #include "Task_Init.h"
 #include "key.h"
 #include "beep.h"
-#include "lcd_init.h"
 #include "User_Tasks.h"
 #include "adc.h"
 #include "task.h"
 #include "lvgl.h"
 #include "lv_port_disp.h"
+#include "measurement_view.h"
+#include "ui.h"
 
 //公共变量定义区
 #define ADC_QUEUE_WAIT_TICKS 100U
 #define LCD_ADC_REFRESH_MS    200U // LVGL使用HAL毫秒时基，每200ms更新采样数值
 #define LCD_LVGL_DELAY_TICKS  5U   // 当前系统tick为1ms，周期处理LVGL刷新和定时器
-#define LCD_ADC_MARGIN       12U
-#define LCD_ADC_FIRST_ROW_Y   48U
-#define LCD_ADC_ROW_HEIGHT    34U
-#define LCD_ADC_VALUE_X       132U
+#define ADC_MAX_CODE          4095U
 
 volatile float adc_average_raw[ADC_CHANNELS] = {0};
 volatile float adc_high_diff_raw = 0.0f;
@@ -24,6 +24,7 @@ volatile float adc_high_diff_raw = 0.0f;
 volatile uint32_t adc_processed_block_count = 0U;
 volatile uint32_t adc_timeout_count = 0U;
 
+static measurement_t latest_measurement;
 
 /*创建用户Freertos任务进程*/
 
@@ -59,14 +60,6 @@ void KeyTask(void *argument)
  */
 void LCDTestTask(void *argument)
 {
-    /* 标签顺序与ADC的五通道扫描顺序一致 */
-    static const char * const channel_labels[ADC_CHANNELS] = {
-        "PA5 VOL", "PA6 LOW", "PA7 MID", "PB0 HIGH", "PB1 REF"
-    };
-    lv_obj_t *adc_labels[ADC_CHANNELS];
-    float adc_snapshot[ADC_CHANNELS];
-    lv_obj_t *screen;
-    lv_obj_t *title;
     uint32_t last_refresh_tick;
 
     (void)argument;
@@ -79,43 +72,7 @@ void LCDTestTask(void *argument)
     lv_tick_set_cb(HAL_GetTick);
     lv_port_disp_init();
 
-    screen = lv_screen_active();
-    lv_obj_set_style_bg_color(screen, lv_color_hex(0x000000), 0);
-    lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, 0);
-    lv_obj_set_style_pad_all(screen, 0, 0);
-    lv_obj_remove_flag(screen, LV_OBJ_FLAG_SCROLLABLE);
-
-    title = lv_label_create(screen);
-    if (title == NULL)
-    {
-        Error_Handler();
-    }
-    lv_label_set_text(title, "ADC RAW (HIGH)");
-    lv_obj_set_pos(title, LCD_ADC_MARGIN, LCD_ADC_MARGIN);
-    lv_obj_set_style_text_color(title, lv_color_hex(0xFFFFFF), 0);
-
-    /* 标签和数值控件创建一次，LVGL按实际变化区域刷新屏幕。 */
-    for(uint32_t channel = 0U; channel < ADC_CHANNELS; channel++)
-    {
-        uint16_t row_y = LCD_ADC_FIRST_ROW_Y + channel * LCD_ADC_ROW_HEIGHT;
-        lv_obj_t *name_label = lv_label_create(screen);
-        adc_labels[channel] = lv_label_create(screen);
-        if (name_label == NULL || adc_labels[channel] == NULL)
-        {
-            Error_Handler();
-        }
-
-        lv_label_set_text(name_label, channel_labels[channel]);
-        lv_obj_set_pos(name_label, LCD_ADC_MARGIN, row_y);
-        lv_obj_set_style_text_color(name_label, lv_color_hex(0xFFFFFF), 0);
-
-        lv_label_set_text(adc_labels[channel], "0.0");
-        lv_obj_set_pos(adc_labels[channel], LCD_ADC_VALUE_X, row_y);
-        lv_obj_set_width(adc_labels[channel], LCD_W - LCD_ADC_VALUE_X - LCD_ADC_MARGIN);
-        lv_obj_set_style_text_align(adc_labels[channel], LV_TEXT_ALIGN_RIGHT, 0);
-        lv_obj_set_style_text_font(adc_labels[channel], &lv_font_montserrat_24, 0);
-        lv_obj_set_style_text_color(adc_labels[channel], lv_color_hex(0xFFFF00), 0);
-    }
+    ui_init();
 
     /* 利用无符号计数差使首次循环立即刷新，同时兼容毫秒计数回绕。 */
     last_refresh_tick = lv_tick_get() - LCD_ADC_REFRESH_MS;
@@ -124,24 +81,19 @@ void LCDTestTask(void *argument)
         uint32_t current_tick = lv_tick_get();
         if ((uint32_t)(current_tick - last_refresh_tick) >= LCD_ADC_REFRESH_MS)
         {
+            measurement_t snapshot;
             last_refresh_tick = current_tick;
 
-            /* 短临界区内拷贝五通道均值，LVGL操作放在临界区外。 */
+            /* 与 ADC 任务同步读取整组结果，绘图留在临界区外。 */
             taskENTER_CRITICAL();
-            for(uint32_t channel = 0U; channel < ADC_CHANNELS; channel++)
+            snapshot = latest_measurement;
+            if (adc_error_code != HAL_ADC_ERROR_NONE)
             {
-                adc_snapshot[channel] = adc_average_raw[channel];
+                snapshot.status = MEASUREMENT_ADC_ERROR;
             }
             taskEXIT_CRITICAL();
 
-            for(uint32_t channel = 0U; channel < ADC_CHANNELS; channel++)
-            {
-                /* 整数拆分保留一位小数，覆盖12位ADC范围并适配LV_USE_FLOAT=0。 */
-                uint32_t scaled_value = (uint32_t)(adc_snapshot[channel] * 10.0f + 0.5f);
-                lv_label_set_text_fmt(adc_labels[channel], "%lu.%lu",
-                                       (unsigned long)(scaled_value / 10U),
-                                       (unsigned long)(scaled_value % 10U));
-            }
+            MeasurementView_Update(snapshot);
         }
 
         lv_timer_handler();
@@ -157,6 +109,12 @@ void ADCTask(void *argument)
 
     for (;;)
     {
+        uint32_t sums[ADC_CHANNELS] = {0U};
+        float averages[ADC_CHANNELS];
+        float high_diff;
+        bool saturated = false;
+        measurement_t result;
+
         status = osMessageQueueGet(ADC_MessageQueue,
                                    &block,
                                    NULL,
@@ -165,6 +123,9 @@ void ADCTask(void *argument)
         if (status == osErrorTimeout)
         {
             adc_timeout_count++;
+            taskENTER_CRITICAL();
+            latest_measurement.status = MEASUREMENT_ADC_TIMEOUT;
+            taskEXIT_CRITICAL();
             continue;
         }
 
@@ -173,28 +134,45 @@ void ADCTask(void *argument)
             Error_Handler();
         }
 
-        for (uint32_t channel = 0U;
-             channel < ADC_CHANNELS;
-             channel++)
+        for (uint32_t sample = 0U; sample < ADC_TIMES; sample++)
         {
-            uint32_t sum = 0U;
+            const uint16_t *codes = block.samples[sample];
 
-            for (uint32_t sample = 0U;
-                 sample < ADC_TIMES;
-                 sample++)
+            /* 电压零码可表示零输入，电流和偏置通道应远离 ADC 两端。 */
+            if (codes[ADC_IDX_VOL] >= ADC_MAX_CODE ||
+                codes[ADC_IDX_HIGH] == 0U || codes[ADC_IDX_HIGH] >= ADC_MAX_CODE ||
+                codes[ADC_IDX_REF] == 0U || codes[ADC_IDX_REF] >= ADC_MAX_CODE)
             {
-                sum += block.samples[sample][channel];
+                saturated = true;
             }
 
-            adc_average_raw[channel] =
-                (float)sum / (float)ADC_TIMES;
+            for (uint32_t channel = 0U; channel < ADC_CHANNELS; channel++)
+            {
+                sums[channel] += codes[channel];
+            }
         }
 
-        /* 保留符号，便于检查零点偏置和信号方向。 */
-        adc_high_diff_raw =
-            adc_average_raw[ADC_IDX_HIGH] -
-            adc_average_raw[ADC_IDX_REF];
+        for (uint32_t channel = 0U; channel < ADC_CHANNELS; channel++)
+        {
+            averages[channel] = (float)sums[channel] / (float)ADC_TIMES;
+        }
 
+        high_diff = averages[ADC_IDX_HIGH] - averages[ADC_IDX_REF];
+        result = Measurement_CalculateHigh(averages[ADC_IDX_VOL], high_diff);
+        if (saturated)
+        {
+            result.status = MEASUREMENT_ADC_LIMIT;
+        }
+
+        /* 原始调试值和测量结果来自同一数据块。换算在临界区外完成。 */
+        taskENTER_CRITICAL();
+        for (uint32_t channel = 0U; channel < ADC_CHANNELS; channel++)
+        {
+            adc_average_raw[channel] = averages[channel];
+        }
+        adc_high_diff_raw = high_diff;
+        latest_measurement = result;
         adc_processed_block_count++;
+        taskEXIT_CRITICAL();
     }
 }
