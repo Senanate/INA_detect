@@ -45,11 +45,11 @@ const osThreadAttr_t ADCTask_attributes = {
   .priority = (osPriority_t) osPriorityAboveNormal,
 };
 
-//LCD测试任务初始化
+//LCD屏幕 LVGL显示任务初始化
 osThreadId_t LCDTestTaskHandle;
 const osThreadAttr_t LCDTestTask_attributes = {
   .name = "LCDTestTask",
-  .stack_size = 128 * 10,
+  .stack_size = 4096, // LVGL绘制及文本格式化需要额外任务栈空间，单位为字节
   .priority = (osPriority_t) osPriorityLow,
 };
 
@@ -71,5 +71,9 @@ void Task_Init(void *argument)
     Hardware_Init_Handle = osThreadNew(Hardware_InitTask, NULL, &Hardware_Init_attributes);
     KeyTaskHandle = osThreadNew(KeyTask, NULL, &KeyTask_attributes);
     LCDTestTaskHandle = osThreadNew(LCDTestTask, NULL, &LCDTestTask_attributes);
+    if (LCDTestTaskHandle == NULL)
+    {
+        Error_Handler();
+    }
     ADCTaskHandle = osThreadNew(ADCTask, NULL, &ADCTask_attributes);
 }
