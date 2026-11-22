@@ -1,13 +1,14 @@
 #ifndef MEASUREMENT_H
 #define MEASUREMENT_H
-
+#include "stdint.h"
 typedef enum
 {
     MEASUREMENT_WAITING = 0,
     MEASUREMENT_VALID,
     MEASUREMENT_ADC_LIMIT,
     MEASUREMENT_ADC_TIMEOUT,
-    MEASUREMENT_ADC_ERROR
+    MEASUREMENT_ADC_ERROR,
+    MEASUREMENT_SWITCHING
 } measurement_status_t;
 
 typedef struct
@@ -16,6 +17,7 @@ typedef struct
     float current_a;
     float power_w;
     measurement_status_t status;
+    uint8_t range;
 } measurement_t;
 
 /**
@@ -26,4 +28,22 @@ typedef struct
  */
 measurement_t Measurement_CalculateHigh(float voltage_code, float current_diff_code);
 
+/**
+ * @brief 根据不同的量程计算电流。
+ * @param diff_code 差值码。
+ * @param range 量程。
+ * @return 计算得到的电流值。
+ */
+float Measurement_CurrentA(float diff_code, uint8_t range);
+
+/**
+ * @brief 根据不同的量程计算测量值。
+ * @param voltage_code 电压码。
+ * @param diff_code 差值码。
+ * @param range 量程。
+ * @return 计算得到的测量值。
+ */
+measurement_t Measurement_CalculateRange(float voltage_code,
+                                         float diff_code,
+                                         uint8_t range);
 #endif

@@ -34,7 +34,8 @@ void Hardware_InitTask(void *argument)
         
         xTaskResumeAll();
         Gate_Port_Init();
-        Gate_Set_Mode(GATE_MODE_HIGH);
+        flow_route_selection(HIGH_CUR);
+        Gate_Set_Mode(GATE_MODE_AUTO);
 
         /* Length 是半字样本数量，共 250 个，缓冲区占 500 字节。 */
         if (HAL_ADC_Start_DMA(&hadc1,

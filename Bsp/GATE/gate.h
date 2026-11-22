@@ -20,13 +20,13 @@ extern "C" {
 #define HIGH_CUR 3
 #define MID_CUR 2
 #define LOW_CUR 1
-
+#
 // Range mode selection
 #define GATE_MODE_AUTO 0
 #define GATE_MODE_LOW  LOW_CUR
 #define GATE_MODE_MID  MID_CUR
 #define GATE_MODE_HIGH HIGH_CUR
-
+#define GATE_MODE_AUTO 0
 void Gate_Port_Init(void);
 void flow_route_selection(uint8_t selection);
 uint8_t Gate_get_status(void);
