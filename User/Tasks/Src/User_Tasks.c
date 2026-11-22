@@ -14,7 +14,7 @@
 
 //公共变量定义区
 #define ADC_QUEUE_WAIT_TICKS 100U
-#define LCD_ADC_REFRESH_MS    200U // LVGL使用HAL毫秒时基，每200ms更新采样数值
+#define LCD_ADC_REFRESH_MS    100U // LVGL使用HAL毫秒时基，每200ms更新采样数值
 #define LCD_LVGL_DELAY_TICKS  5U   // 当前系统tick为1ms，周期处理LVGL刷新和定时器
 #define ADC_MAX_CODE          4095U
 
@@ -115,11 +115,7 @@ void ADCTask(void *argument)
         bool saturated = false;
         measurement_t result;
 
-        status = osMessageQueueGet(ADC_MessageQueue,
-                                   &block,
-                                   NULL,
-                                   ADC_QUEUE_WAIT_TICKS);
-
+        status = osMessageQueueGet(ADC_MessageQueue, &block, NULL, ADC_QUEUE_WAIT_TICKS);
         if (status == osErrorTimeout)
         {
             adc_timeout_count++;
@@ -154,10 +150,10 @@ void ADCTask(void *argument)
 
         for (uint32_t channel = 0U; channel < ADC_CHANNELS; channel++)
         {
-            averages[channel] = (float)sums[channel] / (float)ADC_TIMES;
+            averages[channel] = (float)sums[channel] / (float)ADC_TIMES;//计算每个通道的平均值
         }
 
-        high_diff = averages[ADC_IDX_HIGH] - averages[ADC_IDX_REF];
+        high_diff = averages[ADC_IDX_HIGH] - averages[ADC_IDX_REF];//计算高档电流通道的差值，保留符号
         result = Measurement_CalculateHigh(averages[ADC_IDX_VOL], high_diff);
         if (saturated)
         {
