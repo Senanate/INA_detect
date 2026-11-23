@@ -6,7 +6,7 @@ lv_obj_t *ui_PowerValue;
 lv_obj_t *ui_VoltageValue;
 lv_obj_t *ui_CurrentValue;
 lv_obj_t *ui_MeasurementStatus;
-
+lv_obj_t *ui_Range;
 static lv_obj_t *create_card(lv_obj_t *screen, int32_t y, int32_t height, uint32_t color)
 {
     lv_obj_t *card = lv_obj_create(screen);
@@ -59,13 +59,14 @@ void ui_init(void)
     lv_obj_t *voltage_card;
     lv_obj_t *current_card;
 
+
     lv_obj_remove_style_all(screen);
     lv_obj_remove_flag(screen, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_style_bg_color(screen, lv_color_hex(0x0C1622), 0);
     lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, 0);
 
     create_label(screen, "DC METER", 12, 12, 120, small, white, LV_TEXT_ALIGN_LEFT);
-    create_label(screen, "HIGH RANGE", 128, 12, 100, small, muted, LV_TEXT_ALIGN_RIGHT);
+    ui_Range=create_label(screen, "HIGH RANGE", 128, 12, 100, small, muted, LV_TEXT_ALIGN_RIGHT);
 
     power_card = create_card(screen, 39, 74, 0x13332F);
     create_label(power_card, "POWER", 12, 10, 100, small, green, LV_TEXT_ALIGN_LEFT);

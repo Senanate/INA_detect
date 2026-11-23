@@ -33,6 +33,7 @@ void Hardware_InitTask(void *argument)
 
         
         xTaskResumeAll();
+        /* 上电先建立高挡流路，再开启 AUTO 策略，之后由 ADCTask 根据采样判挡。 */
         Gate_Port_Init();
         flow_route_selection(HIGH_CUR);
         Gate_Set_Mode(GATE_MODE_AUTO);
