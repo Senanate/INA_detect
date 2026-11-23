@@ -1,8 +1,8 @@
 #include "gate.h"
 #include "math.h"
 
-static uint8_t gate_status = HIGH_CUR; // Default status
-static uint8_t gate_mode = GATE_MODE_AUTO; // Default mode
+static uint8_t gate_status = HIGH_CUR; // 当前 GPIO 流路对应的实际挡位
+static uint8_t gate_mode = GATE_MODE_AUTO; // 当前使用自动判挡或固定挡位策略
 
 void Gate_Port_Init(void)
 {
@@ -31,7 +31,7 @@ void Gate_Port_Init(void)
   HAL_GPIO_Init(EN2_PORT, &GPIO_InitStruct);
 }
 
-// 根据选择设置流路
+/* 两个控制脚分属不同 GPIO 端口。HIGH 切到 MID 时，当前写入顺序会先经过 LOW 的控制组合。 */
 void flow_route_selection(uint8_t selection)
 {
   if(selection > HIGH_CUR)
@@ -62,7 +62,9 @@ uint8_t Gate_get_status(void)
   return gate_status;
 }
 
-// 这个函数允许用户直接设置档位模式，自动模式会根据当前电流情况自动切换档位
+/* AUTO 分支仅保存模式，由 ADCTask 根据采样判挡。固定挡位分支会立即写 GPIO，
+ * 运行中切换流路需要与 ADCTask 的暂停采样和清队列过程同步。
+ */
 void Gate_Set_Mode(uint8_t mode)
 {
   if (mode == GATE_MODE_AUTO) {

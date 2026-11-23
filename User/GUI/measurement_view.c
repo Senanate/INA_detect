@@ -1,5 +1,6 @@
 #include "measurement_view.h"
 #include "ui.h"
+#include "gate.h"
 
 static void update_label(lv_obj_t *label, const char *text)
 {
@@ -26,6 +27,7 @@ static void update_reading(lv_obj_t *label, float value)
 void MeasurementView_Update(measurement_t measurement)
 {
     const char *status_text;
+    const char *range_text;
 
     switch (measurement.status)
     {
@@ -33,6 +35,7 @@ void MeasurementView_Update(measurement_t measurement)
         case MEASUREMENT_ADC_LIMIT:   status_text = "ADC SATURATED"; break;
         case MEASUREMENT_ADC_TIMEOUT: status_text = "ADC TIMEOUT"; break;
         case MEASUREMENT_ADC_ERROR:   status_text = "ADC ERROR"; break;
+        case MEASUREMENT_SWITCHING:   status_text = "SWITCHING RANGE"; break;
         default:                     status_text = "WAITING FOR ADC"; break;
     }
 
@@ -49,4 +52,15 @@ void MeasurementView_Update(measurement_t measurement)
         update_label(ui_CurrentValue, "--");
     }
     update_label(ui_MeasurementStatus, status_text);
+
+    /* 从测量快照取物理挡位，和同一快照中的读数、状态一起显示。 */
+    switch (measurement.range)
+    {
+        case HIGH_CUR: range_text = "HIGH RANGE"; break;
+        case MID_CUR:  range_text = "MID RANGE"; break;
+        case LOW_CUR:  range_text = "LOW RANGE"; break;
+        default:       range_text = "--"; break;
+    }
+
+    update_label(ui_Range, range_text);
 }
