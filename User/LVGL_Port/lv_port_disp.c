@@ -48,5 +48,28 @@ void lv_port_disp_init(void)
                            LV_DISPLAY_RENDER_MODE_PARTIAL);
 
     LCD_Open_Light();
-    LCD_Set_Light(80);
+    lv_port_disp_set_backlight(LCD_DEFAULT_BACKLIGHT_PERCENT);
+}
+
+void lv_port_disp_set_backlight(uint8_t percent)
+{
+    LCD_Set_Light(percent);
+}
+
+bool lv_port_disp_set_rotation(uint16_t degrees)
+{
+    /* 显示任务在两次刷新之间调用。SPI DMA 已完成，方形屏的坐标尺寸保持 240×240。 */
+    if (LCD_SetRotation(degrees) != HAL_OK)
+    {
+        return false;
+    }
+
+    /* MADCTL 已负责旋转，LVGL 继续按原布局绘制整个页面。 */
+    lv_obj_invalidate(lv_screen_active());
+    return true;
+}
+
+uint16_t lv_port_disp_rotation(void)
+{
+    return LCD_ROTATION;
 }

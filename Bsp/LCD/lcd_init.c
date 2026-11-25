@@ -4,8 +4,9 @@
 
 /* LCD背光PWM周期，与MX_TIM1_Init中的Period保持一致 */
 #define LCD_BACKLIGHT_PWM_PERIOD 300U
+#define LCD_ROTATION_SPI_TIMEOUT_MS 100U
 
-uint8_t LCD_ROTATION = 0; // 0, 90, 180, 270
+uint16_t LCD_ROTATION = 0; // 0, 90, 180, 270
 uint8_t OFFSET_X = 0;
 uint8_t OFFSET_Y = 0;
 
@@ -187,39 +188,50 @@ void LCD_ST7789_SleepOut(void)
 	????????rotation 0, 90, 180, 270
 	???????  ??
 ******************************************************************************/
-void LCD_SetRotation(uint16_t rotation) {
-	// ???SPI??????У???????????????????????????DMA??16bit???
-	while (HAL_SPI_GetState(&hspi2) != HAL_SPI_STATE_READY) {
-        __NOP(); // ??????????????????????????
+HAL_StatusTypeDef LCD_SetRotation(uint16_t rotation)
+{
+    uint8_t command = 0x36U; /* MADCTL */
+    uint8_t madctl;
+    uint8_t offset_x = 0U;
+    uint8_t offset_y = 0U;
+    HAL_StatusTypeDef status;
+
+    switch (rotation)
+    {
+        case 0U:
+            madctl = 0x00U;
+            break;
+        case 90U:
+            madctl = 0x70U;
+            break;
+        case 180U:
+            madctl = 0xC0U;
+            offset_y = 80U;
+            break;
+        case 270U:
+            madctl = 0xA0U;
+            offset_x = 80U;
+            break;
+        default:
+            return HAL_ERROR;
     }
-	LCD_WR_REG(0x36); // Memory Data Access Control
-	switch(rotation) {
-		case 0:
-			OFFSET_X = 0;
-			OFFSET_Y = 0;
-			LCD_WR_DATA8(0x00);
-			break;
-		case 180:
-			OFFSET_X = 0;
-			OFFSET_Y = 80;
-			LCD_WR_DATA8(0xC0);
-			break;
-		case 90:
-			OFFSET_X = 0;
-			OFFSET_Y = 0;
-			LCD_WR_DATA8(0x70);
-			break;
-		case 270:
-			OFFSET_X = 80;
-			OFFSET_Y = 0;
-			LCD_WR_DATA8(0xA0);
-			break;
-		default:
-			OFFSET_X = 0;
-			OFFSET_Y = 0;
-			LCD_WR_DATA8(0x00);
-			break;
-	}
+
+    LCD_DC_Clr();
+    status = HAL_SPI_Transmit(&hspi2, &command, 1U, LCD_ROTATION_SPI_TIMEOUT_MS);
+    LCD_DC_Set();
+    if (status != HAL_OK)
+    {
+        return status;
+    }
+
+    status = HAL_SPI_Transmit(&hspi2, &madctl, 1U, LCD_ROTATION_SPI_TIMEOUT_MS);
+    if (status == HAL_OK)
+    {
+        OFFSET_X = offset_x;
+        OFFSET_Y = offset_y;
+        LCD_ROTATION = rotation;
+    }
+    return status;
 }
 
 /******************************************************************************
@@ -242,7 +254,10 @@ void LCD_Init(void)
 	HAL_Delay(120);
 
 	// 2. ??????????? (Memory Data Access Control)
-	LCD_SetRotation(LCD_ROTATION);
+	if (LCD_SetRotation(LCD_ROTATION) != HAL_OK)
+	{
+		Error_Handler();
+	}
 
 	// 3. ?????????? (Interface Pixel Format)
     // 0x55 ??? 16λ? (RGB565)??????????0x66 (18λ?)????????????

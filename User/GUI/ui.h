@@ -11,28 +11,14 @@ extern "C" {
 #endif
 
 #include "lvgl.h"
-
-#include "ui_helpers.h"
-#include "ui_events.h"
-
-
-///////////////////// SCREENS ////////////////////
-
 #include "ui_Meter.h"
-
-///////////////////// VARIABLES ////////////////////
-
-
-// EVENTS
-
-extern lv_obj_t * ui____initial_actions0;
 
 // FONTS
 LV_FONT_DECLARE(ui_font_MeterCn16);
+LV_FONT_DECLARE(ui_font_SettingallCN18);
 
-// UI INIT
+/** @brief 显示设备注册后，由 GUI 任务调用一次以初始化并加载测量主页。 */
 void ui_init(void);
-void ui_destroy(void);
 
 #ifdef __cplusplus
 } /*extern "C"*/

@@ -17,8 +17,9 @@
 
 //公共变量定义区
 #define ADC_QUEUE_WAIT_TICKS 100U
-#define LCD_ADC_REFRESH_MS    100U // LVGL使用HAL毫秒时基，每100ms更新采样数值
 #define LCD_LVGL_DELAY_TICKS  5U   // 当前系统tick为1ms，周期处理LVGL刷新和定时器
+#define KEY_SCAN_DELAY_TICKS 10U
+#define KEY_BEEP_DURATION_MS 50U
 #define ADC_MAX_CODE          4095U
 
 
@@ -35,6 +36,7 @@ volatile float adc_high_diff_raw = 0.0f;
 
 volatile uint32_t adc_processed_block_count = 0U;
 volatile uint32_t adc_timeout_count = 0U;
+static volatile uint32_t key_queue_drop_count = 0U;
 
 static measurement_t latest_measurement;
 /*其他功能函数*/
@@ -128,23 +130,17 @@ failed:
 void KeyTask(void *argument)
 {
     key_event_t key_event;
-    while(1)
-    {  
-        if(Key_Scan(&key_event)){
-            /* 发送按键事件到消息队列 */
-            osMessageQueuePut(Key_MessageQueue, &key_event, 0, 0);
-            beep_open();
-            osDelay(100);
-            beep_close();
-        //     /* 简单示例：按下时蜂鸣器响，松开时停止 */
-        //     if(key_event.type == KEY_EVT_CLICK){
-        //         beep_open();
-        //     }else if(key_event.type == KEY_EVT_UP){
-        //         beep_close();
-        //     }
-        // }
+    (void)argument;
+
+    for (;;)
+    {
+        /* 不等待 GUI 消费队列，保持按键消抖和长按检测的扫描节拍。 */
+        if (Key_Scan(&key_event) &&
+            osMessageQueuePut(Key_MessageQueue, &key_event, 0U, 0U) != osOK)
+        {
+            key_queue_drop_count++;
         }
-        osDelay(10);
+        osDelay(KEY_SCAN_DELAY_TICKS);
     }
 }
 /**
@@ -154,7 +150,11 @@ void KeyTask(void *argument)
  */
 void LCDTestTask(void *argument)
 {
-    uint32_t last_refresh_tick;
+    uint32_t last_refresh_tick = 0U;
+    uint32_t beep_start_tick = 0U;
+    bool meter_needs_refresh = true;
+    bool beep_active = false;
+    key_event_t key_event;
 
     (void)argument;
 
@@ -167,15 +167,46 @@ void LCDTestTask(void *argument)
     lv_port_disp_init();
 
     ui_init();
+    MeasurementView_Init();
 
-    /* 利用无符号计数差使首次循环立即刷新，同时兼容毫秒计数回绕。 */
-    last_refresh_tick = lv_tick_get() - LCD_ADC_REFRESH_MS;
     while(1)
     {
+        /* 设置、显示和蜂鸣器由同一任务操作。长按亮度连发只调值。 */
+        while (osMessageQueueGet(Key_MessageQueue, &key_event, NULL, 0U) == osOK)
+        {
+            if (MeasurementView_HandleKey(&key_event) && key_event.type == KEY_EVT_CLICK)
+            {
+                if (key_event.id == KEY_ID_B)
+                {
+                    meter_needs_refresh = true;
+                }
+                if (MeasurementView_KeySoundEnabled())
+                {
+                    if (!beep_active)
+                    {
+                        beep_open();
+                        beep_active = true;
+                    }
+                    beep_start_tick = lv_tick_get();
+                }
+            }
+        }
+
         uint32_t current_tick = lv_tick_get();
-        if ((uint32_t)(current_tick - last_refresh_tick) >= LCD_ADC_REFRESH_MS)
+        if (beep_active && (!MeasurementView_KeySoundEnabled() ||
+                            (uint32_t)(current_tick - beep_start_tick) >= KEY_BEEP_DURATION_MS))
+        {
+            beep_close();
+            beep_active = false;
+        }
+
+        /* 返回主页立刻读取最新快照。无符号计数差兼容毫秒计数回绕。 */
+        if (lv_screen_active() == ui_Meter &&
+            (meter_needs_refresh ||
+             (uint32_t)(current_tick - last_refresh_tick) >= MeasurementView_RefreshIntervalMs()))
         {
             measurement_t snapshot;
+            meter_needs_refresh = false;
             last_refresh_tick = current_tick;
 
             /* 与 ADC 任务同步读取整组结果，绘图留在临界区外。 */
@@ -236,7 +267,7 @@ void ADCTask(void *argument)
         }
 
         uint32_t sums[ADC_CHANNELS] = {0U};
-        float averages[ADC_CHANNELS];
+			float averages[ADC_CHANNELS];
         float peak_a = 0.0f;
         bool voltage_limit = false;
         bool ref_bad = false;

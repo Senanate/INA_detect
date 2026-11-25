@@ -4,25 +4,9 @@
 // Project name: InaGUI
 
 #include "ui.h"
-#include "ui_helpers.h"
-
-///////////////////// VARIABLES ////////////////////
-
-// EVENTS
-lv_obj_t * ui____initial_actions0;
-
-// IMAGES AND IMAGE SETS
-
-///////////////////// TEST LVGL SETTINGS ////////////////////
 #if LV_COLOR_DEPTH != 16
     #error "LV_COLOR_DEPTH should be 16bit to match SquareLine Studio's settings"
 #endif
-
-///////////////////// ANIMATIONS ////////////////////
-
-///////////////////// FUNCTIONS ////////////////////
-
-///////////////////// SCREENS ////////////////////
 
 void ui_init(void)
 {
@@ -30,11 +14,5 @@ void ui_init(void)
     lv_theme_t * theme = lv_theme_simple_init(dispp);
     lv_disp_set_theme(dispp, theme);
     ui_Meter_screen_init();
-    ui____initial_actions0 = lv_obj_create(NULL);
     lv_disp_load_scr(ui_Meter);
-}
-
-void ui_destroy(void)
-{
-    ui_Meter_screen_destroy();
 }

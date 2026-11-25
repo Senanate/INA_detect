@@ -10,6 +10,7 @@
 
 //宏定义
 #define ADC_QUEUE_DEPTH 2U // ADC DMA采集数据队列深度
+#define KEY_QUEUE_DEPTH 8U // 缓冲整屏重绘时到达的按键事件
 
 
 /*队列定义-------------------------*/
@@ -61,9 +62,9 @@ const osThreadAttr_t LCDTestTask_attributes = {
 void Task_Init(void *argument)
 {
     /*创建消息队列*/
-    Key_MessageQueue = osMessageQueueNew(4, sizeof(key_event_t), NULL);
+    Key_MessageQueue = osMessageQueueNew(KEY_QUEUE_DEPTH, sizeof(key_event_t), NULL);
     ADC_MessageQueue = osMessageQueueNew(ADC_QUEUE_DEPTH, sizeof(ADC_Block_t), NULL);//创建ADC DMA采集数据队列,每个队列消息保存一半 DMA 缓冲区的数据
-    if (ADC_MessageQueue == NULL)
+    if (Key_MessageQueue == NULL || ADC_MessageQueue == NULL)
     {
         Error_Handler();
     }
@@ -71,7 +72,7 @@ void Task_Init(void *argument)
     Hardware_Init_Handle = osThreadNew(Hardware_InitTask, NULL, &Hardware_Init_attributes);
     KeyTaskHandle = osThreadNew(KeyTask, NULL, &KeyTask_attributes);
     LCDTestTaskHandle = osThreadNew(LCDTestTask, NULL, &LCDTestTask_attributes);
-    if (LCDTestTaskHandle == NULL)
+    if (KeyTaskHandle == NULL || LCDTestTaskHandle == NULL)
     {
         Error_Handler();
     }

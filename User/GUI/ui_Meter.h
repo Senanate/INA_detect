@@ -12,7 +12,6 @@ extern "C" {
 
 // SCREEN: ui_Meter
 extern void ui_Meter_screen_init(void);
-extern void ui_Meter_screen_destroy(void);
 extern lv_obj_t * ui_Meter;
 extern lv_obj_t * ui_Heading;
 extern lv_obj_t * ui_Range;

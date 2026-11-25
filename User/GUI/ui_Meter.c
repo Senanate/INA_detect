@@ -241,27 +241,3 @@ void ui_Meter_screen_init(void)
                                (lv_style_selector_t)LV_PART_MAIN | LV_STATE_DEFAULT);
 
 }
-
-void ui_Meter_screen_destroy(void)
-{
-    if(ui_Meter) lv_obj_del(ui_Meter);
-
-    // NULL screen variables
-    ui_Meter = NULL;
-    ui_Heading = NULL;
-    ui_Range = NULL;
-    ui_PowerCard = NULL;
-    ui_PowerLabel = NULL;
-    ui_PowerUnit = NULL;
-    ui_PowerValue = NULL;
-    ui_VoltageCard = NULL;
-    ui_VoltageLabel = NULL;
-    ui_VoltageUnit = NULL;
-    ui_VoltageValue = NULL;
-    ui_CurrentCard = NULL;
-    ui_CurrentLabel = NULL;
-    ui_CurrentUnit = NULL;
-    ui_CurrentValue = NULL;
-    ui_MeasurementStatus = NULL;
-
-}

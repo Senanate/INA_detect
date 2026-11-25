@@ -3,7 +3,7 @@
 
 #include "sys.h"
 
-extern uint8_t LCD_ROTATION;
+extern uint16_t LCD_ROTATION;
 extern uint8_t OFFSET_X;
 extern uint8_t OFFSET_Y;
 
@@ -59,7 +59,12 @@ void LCD_Close_Light(void);
 void LCD_ST7789_SleepIn(void);
 void LCD_ST7789_SleepOut(void);
 void LCD_Open_Light(void);
-void LCD_SetRotation(uint16_t rotation);
+/**
+ * @brief 在 SPI 空闲时设置 LCD 方向和地址偏移。
+ * @param rotation 方向角度，支持 0、90、180、270。
+ * @return HAL_OK 表示生效，其他返回值为参数无效或 SPI 错误。
+ */
+HAL_StatusTypeDef LCD_SetRotation(uint16_t rotation);
 
 #endif
 
