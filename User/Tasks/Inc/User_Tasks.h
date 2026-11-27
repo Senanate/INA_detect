@@ -18,4 +18,9 @@ extern volatile uint32_t adc_timeout_count;
  * @note 队列接收超时时发布超时状态并继续等待，切挡重启失败时结束任务。
  */
 void ADCTask(void *argument);
+/**
+ * @brief 检测 USB2 的 CC 方向，建立并维持固定 5 V 的 PPS 合约。
+ * @param argument 任务参数，当前未使用。
+ */
+void PDTask(void *argument);
 #endif /* __USER_TASKS_H__ */

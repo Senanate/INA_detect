@@ -54,7 +54,13 @@ const osThreadAttr_t LCDTestTask_attributes = {
   .priority = (osPriority_t) osPriorityLow,
 };
 
-
+// PD任务初始化
+osThreadId_t PDTaksHandle;
+const osThreadAttr_t PDTaks_attributes = {
+  .name = "PDTaks",
+  .stack_size = 128 * 10,
+  .priority = (osPriority_t) osPriorityNormal,
+};
 
 
 
@@ -72,7 +78,8 @@ void Task_Init(void *argument)
     Hardware_Init_Handle = osThreadNew(Hardware_InitTask, NULL, &Hardware_Init_attributes);
     KeyTaskHandle = osThreadNew(KeyTask, NULL, &KeyTask_attributes);
     LCDTestTaskHandle = osThreadNew(LCDTestTask, NULL, &LCDTestTask_attributes);
-    if (KeyTaskHandle == NULL || LCDTestTaskHandle == NULL)
+    PDTaksHandle = osThreadNew(PDTask, NULL, &PDTaks_attributes);
+    if (KeyTaskHandle == NULL || LCDTestTaskHandle == NULL || PDTaksHandle == NULL)
     {
         Error_Handler();
     }

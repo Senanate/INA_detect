@@ -5,6 +5,7 @@
 #include "key.h"
 #include "beep.h"
 #include "User_Tasks.h"
+#include "fusb302.h"
 #include "adc.h"
 #include "task.h"
 #include "lvgl.h"
@@ -363,6 +364,274 @@ void ADCTask(void *argument)
             latest_measurement.status = MEASUREMENT_ADC_ERROR;
             taskEXIT_CRITICAL();
             osThreadExit();
+        }
+    }
+}
+
+
+/* 当前工程为 1000 Hz，下面的时间单位为 RTOS tick。 */
+#define PPS_TARGET_MV          5000U
+#define PPS_TARGET_MA          1000U
+#define PPS_REFRESH_TICKS      5000U
+
+enum
+{
+    PD_POLL_TICKS          = 2U,
+    PD_VBUS_TIMEOUT_TICKS  = 1600U,
+    PD_TX_TIMEOUT_TICKS    = 15U,
+    PD_ACCEPT_WAIT_TICKS   = 35U,
+    PD_PS_RDY_WAIT_TICKS   = 550U,
+    PPS_REFRESH_MAX_TICKS  = 9000U,
+    PD_RETRY_DELAY_TICKS   = 120U,
+    PD_RETRY_MAX_TICKS     = 1000U,
+    PD_MAX_WAIT_RETRIES    = 2U,
+};
+
+/* Data 与 Control 分别按对象数区分，两类消息可以有相同的类型值。 */
+enum
+{
+    PD_MSG_TYPE_MASK       = 0x1FU,
+    PD_REV_MASK            = 3U << 6,
+    PD_MSG_ID_SHIFT        = 9U,
+    PD_MSG_ID_MASK         = 0x07U,
+    PD_DATA_SOURCE_CAP     = 1U,
+    PD_CTRL_GOOD_CRC       = 1U,
+    PD_CTRL_ACCEPT         = 3U,
+    PD_CTRL_REJECT         = 4U,
+    PD_CTRL_PS_RDY         = 6U,
+    PD_CTRL_WAIT           = 12U,
+    PD_CTRL_SOFT_RESET     = 13U,
+    PD_CTRL_NOT_SUPPORTED  = 16U,
+    PD_RDO_NO_USB_SUSPEND  = 1UL << 24,
+};
+
+typedef enum
+{
+    PD_WAIT_SOURCE_CAP,
+    PD_WAIT_TX,
+    PD_WAIT_ACCEPT,
+    PD_WAIT_PS_RDY,
+    PD_PPS_READY,
+    PD_WAIT_RETRY
+} PD_State_t;
+
+/* 返回 0 表示当前 Source_Capabilities 没有覆盖目标的 PPS APDO。 */
+static uint32_t PD_BuildPpsRdo(const FUSB302_Packet_t *packet)
+{
+    if ((packet->header & PD_REV_MASK) != PD_SPEC_REV_30)
+    {
+        return 0U;
+    }
+
+    for (uint8_t i = 0U; i < packet->object_count; ++i)
+    {
+        uint32_t apdo = packet->data_objects[i];
+        /* 源端 APDO 的电压单位为 100 mV，电流单位为 50 mA。 */
+        uint32_t min_mv = ((apdo >> 8U) & 0xFFU) * 100U;
+        uint32_t max_mv = ((apdo >> 17U) & 0xFFU) * 100U;
+        uint32_t max_ma = (apdo & 0x7FU) * 50U;
+
+        /* 高四位为 0xC 时，PDO 类型为 APDO，子类型为 SPR PPS。 */
+        if ((apdo >> 28U) == 0xCU && min_mv <= PPS_TARGET_MV &&
+            PPS_TARGET_MV <= max_mv && PPS_TARGET_MA <= max_ma)
+        {
+            /* 对象位置从 1 开始，按完整列表编号。PPS RDO 的电压单位为 20 mV。 */
+            return ((uint32_t)(i + 1U) << 28U) | PD_RDO_NO_USB_SUSPEND |
+                   ((PPS_TARGET_MV / 20U) << 9U) | (PPS_TARGET_MA / 50U);
+        }
+    }
+    return 0U;
+}
+
+/* true 表示对端 Hard Reset 已处理，保持 CC 接通并从头协商。 */
+static bool PD_RunPpsSession(void)
+{
+    PD_State_t state = PD_WAIT_SOURCE_CAP;
+    uint8_t tx_id = 0U;
+    uint8_t last_rx_id = UINT8_MAX; /* 新会话允许接收任何有效的首个消息序号。 */
+    uint8_t wait_retries = 0U;
+    uint32_t state_tick = osKernelGetTickCount();
+    uint32_t request_tick = 0U;
+    uint32_t rdo = 0U;
+    bool vbus_seen = false;
+    bool have_contract = false;
+
+    for (;;)
+    {
+        FUSB302_PdStatus_t status;
+        if (FUSB302_ReadPdStatus(&status) != HAL_OK)
+        {
+            return false;
+        }
+        if (status.hard_reset)
+        {
+            return FUSB302_ResetPd() == HAL_OK;
+        }
+
+        uint32_t now = osKernelGetTickCount();
+        if (!status.vbus_ok)
+        {
+            if (vbus_seen || (uint32_t)(now - state_tick) >= PD_VBUS_TIMEOUT_TICKS)
+            {
+                return false;
+            }
+            osDelay(PD_POLL_TICKS);
+            continue;
+        }
+        vbus_seen = true;
+
+        if (state == PD_WAIT_TX)
+        {
+            if (status.tx_failed)
+            {
+                return false;
+            }
+            if (!status.tx_acked)
+            {
+                if ((uint32_t)(now - state_tick) >= PD_TX_TIMEOUT_TICKS)
+                {
+                    return false;
+                }
+                osDelay(PD_POLL_TICKS);
+                continue;
+            }
+
+            /* 硬件已收到 GoodCRC。FIFO 中可能已有对端的 Accept。 */
+            tx_id = (uint8_t)((tx_id + 1U) & PD_MSG_ID_MASK);
+            request_tick = now;
+            state_tick = now;
+            state = PD_WAIT_ACCEPT;
+        }
+
+        FUSB302_Packet_t packet;
+        bool received;
+        bool send_request = false;
+        if (FUSB302_ReadPacket(&packet, &received) != HAL_OK)
+        {
+            return false;
+        }
+        now = osKernelGetTickCount();
+
+        if (received)
+        {
+            uint8_t type = (uint8_t)(packet.header & PD_MSG_TYPE_MASK);
+            uint8_t rx_id = (uint8_t)((packet.header >> PD_MSG_ID_SHIFT) & PD_MSG_ID_MASK);
+            bool control = packet.object_count == 0U;
+
+            if (control && type == PD_CTRL_SOFT_RESET)
+            {
+                return false; /* 联调版通过重新挂接恢复会话。 */
+            }
+            /* GoodCRC 回显本机发送序号，源端重复帧也须跳过策略处理。 */
+            if ((!control || type != PD_CTRL_GOOD_CRC) && rx_id != last_rx_id)
+            {
+                last_rx_id = rx_id;
+                if (!control && type == PD_DATA_SOURCE_CAP)
+                {
+                    /* 新公告会改变对象位置，后续请求以最新列表为准。 */
+                    rdo = PD_BuildPpsRdo(&packet);
+                    send_request = rdo != 0U;
+                    wait_retries = 0U;
+                    state = PD_WAIT_SOURCE_CAP;
+                }
+                else if (control && state == PD_WAIT_ACCEPT)
+                {
+                    if (type == PD_CTRL_ACCEPT)
+                    {
+                        state = PD_WAIT_PS_RDY;
+                        state_tick = now;
+                    }
+                    else if (type == PD_CTRL_WAIT && wait_retries < PD_MAX_WAIT_RETRIES)
+                    {
+                        ++wait_retries;
+                        state = PD_WAIT_RETRY;
+                        state_tick = now;
+                    }
+                    else if (type == PD_CTRL_REJECT || type == PD_CTRL_WAIT ||
+                             type == PD_CTRL_NOT_SUPPORTED)
+                    {
+                        state = PD_WAIT_SOURCE_CAP;
+                    }
+                }
+                else if (control && type == PD_CTRL_PS_RDY && state == PD_WAIT_PS_RDY)
+                {
+                    /* 源端已完成电源切换，至此才进入 PPS 就绪状态。 */
+                    have_contract = true;
+                    wait_retries = 0U;
+                    state = PD_PPS_READY;
+                }
+            }
+        }
+
+        uint32_t elapsed = now - state_tick;
+        if ((state == PD_WAIT_ACCEPT && elapsed >= PD_ACCEPT_WAIT_TICKS) ||
+            (state == PD_WAIT_PS_RDY && elapsed >= PD_PS_RDY_WAIT_TICKS) ||
+            (state == PD_WAIT_RETRY && elapsed >= PD_RETRY_MAX_TICKS))
+        {
+            return false;
+        }
+
+        if (state == PD_PPS_READY)
+        {
+            uint32_t since_request = now - request_tick;
+            if (since_request >= PPS_REFRESH_MAX_TICKS)
+            {
+                return false;
+            }
+            /* 空闲且源端给出 SinkTxOK 时，主动重发刚才的 PPS 请求。 */
+            send_request = !received && status.sink_tx_ok &&
+                           since_request >= PPS_REFRESH_TICKS;
+        }
+        else if (state == PD_WAIT_RETRY)
+        {
+            send_request = !received && elapsed >= PD_RETRY_DELAY_TICKS &&
+                           (!have_contract || status.sink_tx_ok);
+        }
+
+        if (send_request)
+        {
+            if (FUSB302_SendRequestRdo(rdo, PD_SPEC_REV_30, tx_id) != HAL_OK)
+            {
+                return false;
+            }
+            state_tick = osKernelGetTickCount();
+            state = PD_WAIT_TX;
+        }
+
+        osDelay(PD_POLL_TICKS);
+    }
+}
+
+void PDTask(void *argument)
+{
+    (void)argument;
+
+    for (;;)
+    {
+        /* 联调时由 USB3 供电，让 MCU 在 USB2 的 VBUS 撤掉时继续运行。 */
+        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_10, GPIO_PIN_RESET);
+        osDelay(200U); /* 留给源端检测断开并撤掉旧合约的时间。 */
+        if (FUSB302_StartSinkDetection() != HAL_OK)
+        {
+            continue;
+        }
+        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_10, GPIO_PIN_SET);
+
+        uint8_t togss;
+        while (FUSB302_ReadToggleStatus(&togss) == HAL_OK)
+        {
+            if (togss != 0U)
+            {
+                if (FUSB302_ConfigurePdRx(togss) == HAL_OK)
+                {
+                    while (PD_RunPpsSession())
+                    {
+                        /* 对端 Hard Reset 后重新等 Source_Capabilities。 */
+                    }
+                }
+                break;
+            }
+            osDelay(5U); /* 插线前让出 CPU，等待 CC 自动检测完成。 */
         }
     }
 }
